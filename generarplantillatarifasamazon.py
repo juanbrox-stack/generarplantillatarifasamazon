@@ -5,7 +5,6 @@ import io
 def procesar_tarifas(df_origen, pais_seleccionado):
     filas_finales = []
     
-    # Mapeo de códigos de país para los prefijos
     dict_paises = {
         "España": "ES",
         "Francia": "FR",
@@ -14,31 +13,36 @@ def procesar_tarifas(df_origen, pais_seleccionado):
         "Reino Unido": "UK"
     }
     
-    prefijo_pais = dict_paises.get(pais_seleccionado, pais_seleccionado)
+    prefijo_pais = dict_paises.get(pais_seleccionado, "ES")
 
     for index, row in df_origen.iterrows():
         try:
-            # SKU en Columna A (índice 0), Precio en Columna C (índice 2)
-            sku_raw = str(row[0]).strip()
+            # SKU en Columna A, Precio en Columna C
+            sku_input = str(row[0]).strip()
             precio_val = str(row[2]).replace('€', '').replace(',', '.').strip()
             
-            # Saltamos filas vacías o cabeceras
-            if not sku_raw or sku_raw.upper() == "SKU" or precio_val == "nan":
+            if not sku_input or sku_input.upper() == "SKU" or precio_val == "nan":
                 continue
                 
             precio = float(precio_val)
 
-            # --- NUEVA LÓGICA DE PREFIJOS ---
-            # 1. El SKU tal cual (ej. A90)
-            # 2. El SKU con "S" delante (ej. SA90)
-            # 3. El SKU con el prefijo del PAÍS delante (ej. FRA90) - Solo si no es España
-            
-            lista_skus_generar = [sku_raw, f"S{sku_raw}"]
-            
-            if prefijo_pais != "ES":
-                lista_skus_generar.append(f"{prefijo_pais}{sku_raw}")
+            # --- LÓGICA DE FORMATEO DE SKU BASE ---
+            # Si el SKU empieza por un dígito, añadimos el 0. Si no, lo dejamos igual.
+            if sku_input[0].isdigit():
+                sku_base = f"0{sku_input}"
+            else:
+                sku_base = sku_input
 
-            # Cálculos de precios (se mantienen según tu instrucción original)
+            # --- GENERACIÓN DE CLONES ---
+            # 1. El SKU formateado (01245 o A90)
+            # 2. El SKU con "S" (S01245 o SA90)
+            lista_skus_generar = [sku_base, f"S{sku_base}"]
+            
+            # 3. El SKU con prefijo de país (FR01245 o FRA90) - Solo si no es España
+            if prefijo_pais != "ES":
+                lista_skus_generar.append(f"{prefijo_pais}{sku_base}")
+
+            # Precios
             min_price = precio - 1
             max_price = precio + 1
             bus_price = precio - 1
@@ -54,30 +58,35 @@ def procesar_tarifas(df_origen, pais_seleccionado):
                     "handling-time": "",
                     "business-price": bus_price
                 })
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, IndexError):
             continue
             
     return pd.DataFrame(filas_finales)
 
-# --- Interfaz de Streamlit ---
-st.set_page_config(page_title="Generador de Tarifas v3", layout="centered")
+# --- Interfaz Streamlit ---
+st.set_page_config(page_title="Generador de Tarifas v4", layout="centered")
 
-st.title("📊 Adaptador de Tarifas SKU Especiales")
-st.markdown("Configurado para SKUs tipo: **A90**, **SA90**, **FRA90**.")
+st.title("📊 Generador de Tarifas Inteligente")
+st.markdown("""
+**Reglas aplicadas:**
+* Si el SKU es numérico (1245) → Se convierte en **01245**.
+* Si el SKU tiene letras (A90) → Se queda como **A90**.
+* Se generan clones con **S** y con **Letras de País**.
+""")
 
-pais_label = st.selectbox("Selecciona el mercado destino:", ["España", "Francia", "Italia", "Alemania", "Reino Unido"])
+pais_label = st.selectbox("Mercado destino:", ["España", "Francia", "Italia", "Alemania", "Reino Unido"])
 
-archivo = st.file_uploader("Sube el archivo Excel (Price_Protection)", type=["xlsx"])
+archivo = st.file_uploader("Cargar Price_Protection.xlsx", type=["xlsx"])
 
 if archivo:
     try:
         df_input = pd.read_excel(archivo, header=None)
         
-        if st.button("🚀 Generar Fichero"):
+        if st.button("🚀 Procesar y Descargar"):
             df_resultado = procesar_tarifas(df_input, pais_label)
             
             if not df_resultado.empty:
-                st.success(f"¡Procesado! Generadas {len(df_resultado)} líneas.")
+                st.success(f"¡Hecho! {len(df_resultado)} filas generadas.")
                 st.dataframe(df_resultado.head(15))
                 
                 output = io.BytesIO()
@@ -85,12 +94,10 @@ if archivo:
                     df_resultado.to_excel(writer, index=False, sheet_name='Plantilla')
                 
                 st.download_button(
-                    label="📥 Descargar Excel Final",
+                    label="📥 Descargar Excel",
                     data=output.getvalue(),
-                    file_name=f"Tarifas_{pais_label}.xlsx",
+                    file_name=f"Tarifas_{pais_label}_Final.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
-            else:
-                st.error("No se encontraron datos válidos. Revisa que el precio esté en la columna C.")
     except Exception as e:
-        st.error(f"Error técnico: {e}")
+        st.error(f"Error: {e}")
