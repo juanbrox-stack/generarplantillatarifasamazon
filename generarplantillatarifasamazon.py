@@ -56,7 +56,7 @@ def procesar_tarifas(df_origen, pais_seleccionado):
 # --- Interfaz de Streamlit ---
 st.set_page_config(page_title="Generador de Tarifas v2", layout="centered")
 
-st.title("📊 Adaptador de Tarifas (Columna A y C)")
+st.title("📊 Generador de plantilla tarifas amazon")
 st.markdown("Esta versión lee el **SKU de la Columna A** y el **Precio de la Columna C**.")
 
 pais_label = st.selectbox("Selecciona el mercado destino:", ["España", "FR", "IT", "DE", "UK"])
