@@ -56,7 +56,7 @@ def procesar_tarifas(df_origen, pais_seleccionado):
 # --- Interfaz de Streamlit ---
 st.set_page_config(page_title="Generador de Tarifas v2", layout="centered")
 
-st.title("📊 Generador de plantilla tarifas amazon")
+st.title("📊 Crear fichero de subida para actualizar las tarifas en Amazon")
 st.markdown("Esta versión lee el **SKU de la Columna A** y el **Precio de la Columna C**.")
 
 pais_label = st.selectbox("Selecciona el mercado destino:", ["España", "FR", "IT", "DE", "UK"])
@@ -69,7 +69,7 @@ if archivo:
         # Cargamos el Excel
         df_input = pd.read_excel(archivo, header=None)
         
-        if st.button("🚀 Procesar Columnas A y C"):
+        if st.button("🚀 Procesar y generar fichero"):
             df_resultado = procesar_tarifas(df_input, codigo_pais)
             
             if not df_resultado.empty:
