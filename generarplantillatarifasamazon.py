@@ -3,36 +3,40 @@ import pandas as pd
 import io
 
 def procesar_tarifas(df_origen, pais_seleccionado):
-    # 1. Identificar la fila de cabecera y limpiar datos
-    # Buscamos la fila donde esté el SKU para empezar a leer desde ahí
-    df_limpio = df_origen.copy()
-    
-    # En tu fichero, los datos reales parecen empezar después de las primeras filas de títulos
-    # Buscamos la palabra 'SKU' o simplemente saltamos las filas no numéricas en el precio
     filas_finales = []
     
-    # Definir prefijos según la lógica solicitada
+    # Lógica de prefijos según tu requerimiento
     # España: 0 y S0
-    # Otros: 0, S0 y [PAIS]0
-    prefijos = ["0", "S0"]
-    if pais_seleccionado not in ["ES", "España"]:
-        prefijos.append(f"{pais_seleccionado}0")
-
-    for index, row in df_limpio.iterrows():
+    # Otros países: 0, S0 y Prefijo País (FR0, IT0, etc)
+    prefijos_base = ["0", "S0"]
+    
+    for index, row in df_origen.iterrows():
         try:
-            # Intentamos obtener el SKU (Columna A) y Precio (Columna B)
+            # --- AJUSTE DE COLUMNAS ---
+            # SKU está en la columna A (índice 0)
             sku_raw = str(row[0]).strip()
-            precio_raw = str(row[1]).replace(',', '.') # Por si viene con comas
             
-            # Si el precio no es un número (es una cabecera), saltamos la fila
-            precio = float(precio_raw)
+            # El Precio está en la columna C (índice 2)
+            # Limpiamos el valor por si trae símbolos de moneda o comas
+            precio_val = str(row[2]).replace('€', '').replace(',', '.').strip()
+            precio = float(precio_val)
             
-            # Lógica de precios
+            # Si el SKU es el nombre de la cabecera, saltamos
+            if "SKU" in sku_raw.upper():
+                continue
+
+            # Cálculos de precios
             min_price = precio - 1
             max_price = precio + 1
-            bus_price = precio - 1 # Igual que el mínimo según instrucciones
+            bus_price = precio - 1
             
-            for pref in prefijos:
+            # Generar lista de prefijos para este SKU
+            prefijos_a_procesar = prefijos_base.copy()
+            if pais_seleccionado not in ["ES", "España"]:
+                # Añadimos el prefijo del país (ej: FR0)
+                prefijos_a_procesar.append(f"{pais_seleccionado}0")
+
+            for pref in prefijos_a_procesar:
                 filas_finales.append({
                     "sku": f"{pref}{sku_raw}",
                     "price": precio,
@@ -43,61 +47,47 @@ def procesar_tarifas(df_origen, pais_seleccionado):
                     "handling-time": "",
                     "business-price": bus_price
                 })
-        except (ValueError, TypeError):
-            # Si no puede convertir a float, es una cabecera o fila vacía, la ignoramos
+        except (ValueError, TypeError, KeyError):
+            # Si la fila no tiene un número en la columna C, se ignora (cabeceras, vacíos)
             continue
             
     return pd.DataFrame(filas_finales)
 
 # --- Interfaz de Streamlit ---
-st.set_page_config(page_title="Generador de Tarifas", layout="wide")
+st.set_page_config(page_title="Generador de Tarifas v2", layout="centered")
 
-st.title("📦 Adaptador de Tarifas Marketplace")
-st.info("Sube tu archivo Excel. El sistema ignorará las cabeceras de texto automáticamente.")
+st.title("📊 Adaptador de Tarifas (Columna A y C)")
+st.markdown("Esta versión lee el **SKU de la Columna A** y el **Precio de la Columna C**.")
 
-# Configuración de país
-col_config, col_upload = st.columns([1, 2])
+pais_label = st.selectbox("Selecciona el mercado destino:", ["España", "FR", "IT", "DE", "UK"])
+codigo_pais = "ES" if pais_label == "España" else pais_label
 
-with col_config:
-    pais_label = st.selectbox(
-        "¿Para qué mercado es la tarifa?",
-        ["España", "FR", "IT", "DE"]
-    )
-    codigo_pais = "ES" if pais_label == "España" else pais_label
-
-with col_upload:
-    archivo = st.file_uploader("Cargar archivo origen (Excel/CSV)", type=["xlsx", "csv"])
+archivo = st.file_uploader("Sube el archivo Price_Protection", type=["xlsx"])
 
 if archivo:
     try:
-        # Leer archivo manejando si es CSV o Excel
-        if archivo.name.endswith('.csv'):
-            df_input = pd.read_csv(archivo, header=None)
-        else:
-            df_input = pd.read_excel(archivo, header=None)
+        # Cargamos el Excel
+        df_input = pd.read_excel(archivo, header=None)
         
-        if st.button("🚀 Procesar y Generar Fichero"):
+        if st.button("🚀 Procesar Columnas A y C"):
             df_resultado = procesar_tarifas(df_input, codigo_pais)
             
             if not df_resultado.empty:
-                st.success(f"¡Hecho! Se han generado {len(df_resultado)} filas.")
+                st.success(f"¡Listo! Se han procesado {len(df_resultado)} filas.")
+                st.dataframe(df_resultado.head(10))
                 
-                # Vista previa
-                st.dataframe(df_resultado.head(10), use_container_width=True)
-                
-                # Preparar descarga en Excel (Formato valores, sin fórmulas)
+                # Exportación limpia a Excel
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                    df_resultado.to_excel(writer, index=False, sheet_name='Template')
+                    df_resultado.to_excel(writer, index=False, sheet_name='Plantilla')
                 
                 st.download_button(
-                    label="📥 Descargar Plantilla Cumplimentada",
+                    label="📥 Descargar Excel para Marketplace",
                     data=output.getvalue(),
-                    file_name=f"Plantilla_Tarifas_{codigo_pais}.xlsx",
+                    file_name=f"Tarifas_{codigo_pais}_Final.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
             else:
-                st.warning("No se encontraron datos numéricos válidos en las dos primeras columnas.")
-                
+                st.error("No se detectaron precios válidos en la tercera columna (Columna C).")
     except Exception as e:
-        st.error(f"Error crítico: {e}")
+        st.error(f"Error al leer el archivo: {e}")
