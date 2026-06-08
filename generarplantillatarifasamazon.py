@@ -11,15 +11,16 @@ import re
 #                      int  = índice fijo de columna (0-based) en el Excel
 # moneda_extra: símbolo(s) adicionales a limpiar del precio
 PAISES_CONFIG = {
-    "España":       {"prefijo": "ES",  "col_precio_override": None, "moneda_extra": ""},
-    "Francia":      {"prefijo": "FR",  "col_precio_override": None, "moneda_extra": ""},
-    "Italia":       {"prefijo": "IT",  "col_precio_override": None, "moneda_extra": ""},
-    "Alemania":     {"prefijo": "DE",  "col_precio_override": None, "moneda_extra": ""},
-    "Reino Unido":  {"prefijo": "UK",  "col_precio_override": None, "moneda_extra": "£"},
-    "Holanda":      {"prefijo": "NL",  "col_precio_override": None, "moneda_extra": ""},
-    "Bélgica":      {"prefijo": "BE",  "col_precio_override": None, "moneda_extra": ""},
-    "Polonia":      {"prefijo": "PL",  "col_precio_override": 8,    "moneda_extra": "PLN"},  # col I (índice 8)
-    "Suecia":       {"prefijo": "SE",  "col_precio_override": 8,    "moneda_extra": "SEK"},  # col I (índice 8)
+    # solo_sku_base=True → no genera variantes S ni prefijo país
+    "España":       {"prefijo": "ES",  "col_precio_override": None, "moneda_extra": "",    "solo_sku_base": False},
+    "Francia":      {"prefijo": "FR",  "col_precio_override": None, "moneda_extra": "",    "solo_sku_base": False},
+    "Italia":       {"prefijo": "IT",  "col_precio_override": None, "moneda_extra": "",    "solo_sku_base": False},
+    "Alemania":     {"prefijo": "DE",  "col_precio_override": None, "moneda_extra": "",    "solo_sku_base": False},
+    "Reino Unido":  {"prefijo": "UK",  "col_precio_override": None, "moneda_extra": "£",   "solo_sku_base": False},
+    "Holanda":      {"prefijo": "NL",  "col_precio_override": None, "moneda_extra": "",    "solo_sku_base": True},
+    "Bélgica":      {"prefijo": "BE",  "col_precio_override": None, "moneda_extra": "",    "solo_sku_base": True},
+    "Polonia":      {"prefijo": "PL",  "col_precio_override": 8,    "moneda_extra": "PLN", "solo_sku_base": True},
+    "Suecia":       {"prefijo": "SE",  "col_precio_override": 8,    "moneda_extra": "SEK", "solo_sku_base": True},
 }
 
 LISTA_PAISES = list(PAISES_CONFIG.keys())
@@ -132,9 +133,13 @@ def procesar_tarifas(df_origen, pais_seleccionado, col_sku, col_precio):
                 sku_base = sku_input
 
             # --- GENERACIÓN DE VARIANTES ---
-            lista_skus_generar = [sku_base, f"S{sku_base}"]
-            if prefijo_pais != "ES":
-                lista_skus_generar.append(f"{prefijo_pais}{sku_base}")
+            if config["solo_sku_base"]:
+                # NL, BE, PL, SE → solo el SKU base, sin espejo S ni prefijo país
+                lista_skus_generar = [sku_base]
+            else:
+                lista_skus_generar = [sku_base, f"S{sku_base}"]
+                if prefijo_pais != "ES":
+                    lista_skus_generar.append(f"{prefijo_pais}{sku_base}")
 
             min_price  = round(precio - 1, 2)
             max_price  = round(precio + 1, 2)
