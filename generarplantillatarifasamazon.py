@@ -242,14 +242,25 @@ archivo = st.file_uploader("Cargar fichero de tarifas (.xlsx)", type=["xlsx"])
 
 if archivo:
     try:
-        # Leer la pestaña correcta (cacheado por bytes + país)
-        file_bytes = archivo.getvalue()
-        df_raw, hoja_usar, (msg_tipo, msg_texto) = cargar_hoja(file_bytes, pais_label)
-        if msg_tipo == "info":
-            st.info(msg_texto)
-        elif msg_tipo == "warning":
-            st.warning(msg_texto)
-        st.markdown(f"**Previsualización — pestaña `{hoja_usar}`** ({len(df_raw)} filas totales):")
+        import io as _io
+        _bytes = archivo.getvalue()
+        _xl = pd.ExcelFile(_io.BytesIO(_bytes))
+        _hojas = _xl.sheet_names
+        _hoja_pais = HOJAS_PAIS.get(pais_label)
+
+        if _hoja_pais and _hoja_pais in _hojas:
+            hoja_usar = _hoja_pais
+        elif _hoja_pais:
+            _coin = next((h for h in _hojas if _hoja_pais.lower() in h.lower() or h.lower() in _hoja_pais.lower()), None)
+            hoja_usar = _coin if _coin else _hojas[0]
+            if not _coin:
+                st.warning(f"⚠️ Pestaña '{_hoja_pais}' no encontrada. Disponibles: {_hojas}")
+        else:
+            hoja_usar = _hojas[0]
+
+        df_raw = pd.read_excel(_io.BytesIO(_bytes), sheet_name=hoja_usar, header=None)
+        st.info(f"📋 Pestaña: **{hoja_usar}**")
+        st.markdown(f"**Previsualización — `{hoja_usar}`** ({len(df_raw)} filas totales):")
         st.dataframe(df_raw.head(8), use_container_width=True)
 
         df_datos, col_sku, col_precio_auto = detectar_columnas(df_raw)
