@@ -184,6 +184,42 @@ def procesar_tarifas(df_origen, pais_seleccionado, col_sku, col_precio):
 
 
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Carga cacheada del Excel — se invalida al cambiar archivo O país
+# ---------------------------------------------------------------------------
+@st.cache_data(show_spinner=False)
+def cargar_hoja(file_bytes: bytes, pais: str):
+    """Lee la pestaña correcta del Excel según el país. Cacheado por (bytes, país)."""
+    import io as _io
+    xl = pd.ExcelFile(_io.BytesIO(file_bytes))
+    hojas_disponibles = xl.sheet_names
+    hoja_pais = HOJAS_PAIS.get(pais)
+
+    if hoja_pais and hoja_pais in hojas_disponibles:
+        hoja_usar = hoja_pais
+        msg = ("info", f"📋 Leyendo pestaña: **{hoja_usar}**")
+    elif hoja_pais:
+        coincidencia = next(
+            (h for h in hojas_disponibles
+             if hoja_pais.lower() in h.lower() or h.lower() in hoja_pais.lower()),
+            None
+        )
+        if coincidencia:
+            hoja_usar = coincidencia
+            msg = ("info", f"📋 Leyendo pestaña: **{hoja_usar}** (coincidencia aproximada)")
+        else:
+            hoja_usar = hojas_disponibles[0]
+            msg = ("warning",
+                   f"⚠️ No se encontró '{hoja_pais}'. "
+                   f"Pestañas disponibles: {hojas_disponibles}. Usando: **{hoja_usar}**")
+    else:
+        hoja_usar = hojas_disponibles[0]
+        msg = (None, "")
+
+    df = pd.read_excel(_io.BytesIO(file_bytes), sheet_name=hoja_usar, header=None)
+    return df, hoja_usar, msg
+
+
 # Interfaz Streamlit
 # ---------------------------------------------------------------------------
 st.set_page_config(page_title="Generador de Tarifas Amazon", layout="centered")
@@ -207,27 +243,13 @@ archivo = st.file_uploader("Cargar fichero de tarifas (.xlsx)", type=["xlsx"])
 
 if archivo:
     try:
-        # Detectar hojas disponibles y seleccionar la del país si existe
-        xl = pd.ExcelFile(archivo)
-        hojas_disponibles = xl.sheet_names
-        hoja_pais = HOJAS_PAIS.get(pais_label)
-
-        if hoja_pais and hoja_pais in hojas_disponibles:
-            hoja_usar = hoja_pais
-            st.info(f"📋 Leyendo pestaña: **{hoja_usar}**")
-        elif hoja_pais and hoja_pais not in hojas_disponibles:
-            # Intentar coincidencia parcial (por si hay tildes o espacios distintos)
-            coincidencia = next((h for h in hojas_disponibles if hoja_pais.lower() in h.lower() or h.lower() in hoja_pais.lower()), None)
-            if coincidencia:
-                hoja_usar = coincidencia
-                st.info(f"📋 Leyendo pestaña: **{hoja_usar}** (coincidencia aproximada)")
-            else:
-                hoja_usar = hojas_disponibles[0]
-                st.warning(f"⚠️ No se encontró la pestaña '{hoja_pais}'. Pestañas disponibles: {hojas_disponibles}. Usando: **{hoja_usar}**")
-        else:
-            hoja_usar = hojas_disponibles[0]
-
-        df_raw = pd.read_excel(xl, sheet_name=hoja_usar, header=None)
+        # Leer la pestaña correcta (cacheado por bytes + país)
+        file_bytes = archivo.read()
+        df_raw, hoja_usar, (msg_tipo, msg_texto) = cargar_hoja(file_bytes, pais_label)
+        if msg_tipo == "info":
+            st.info(msg_texto)
+        elif msg_tipo == "warning":
+            st.warning(msg_texto)
         st.markdown(f"**Previsualización del fichero cargado** ({len(df_raw)} filas totales):")
         st.dataframe(df_raw.head(8), use_container_width=True)
 
