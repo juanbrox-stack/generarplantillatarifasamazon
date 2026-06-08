@@ -91,9 +91,9 @@ def procesar_tarifas(df_origen, pais_seleccionado, col_sku, col_precio):
             precio = limpiar_precio(precio_raw)
 
             # --- FORMATEO DE SKU BASE ---
-            # Si empieza por dígito → añadir 0 delante
-            if sku_input[0].isdigit():
-                sku_base = f"0{sku_input}"
+            # Si es completamente numérico → rellenar con ceros hasta 5 dígitos
+            if sku_input.isdigit():
+                sku_base = sku_input.zfill(5)
             else:
                 sku_base = sku_input
 
