@@ -10,6 +10,20 @@ import re
 # col_precio_override: None = usar detección automática / columna manual
 #                      int  = índice fijo de columna (0-based) en el Excel
 # moneda_extra: símbolo(s) adicionales a limpiar del precio
+# Mapeo país → nombre de pestaña en el Excel de tarifa internacional
+# None = no hay pestaña específica, se usa la hoja activa / primera
+HOJAS_PAIS = {
+    "España":      None,
+    "Francia":     "FRANCIA (ES-FR)",
+    "Italia":      "ITALIA (ES-IT)",
+    "Alemania":    "ALEMANAI (ES-DE)",
+    "Reino Unido": None,
+    "Holanda":     "HOLANDA",
+    "Bélgica":     "BELGICA",
+    "Polonia":     "POLONIA",
+    "Suecia":      "SUECIA",
+}
+
 PAISES_CONFIG = {
     # solo_sku_base=True → no genera variantes S ni prefijo país
     "España":       {"prefijo": "ES",  "col_precio_override": None, "moneda_extra": "",    "solo_sku_base": False},
@@ -193,7 +207,27 @@ archivo = st.file_uploader("Cargar fichero de tarifas (.xlsx)", type=["xlsx"])
 
 if archivo:
     try:
-        df_raw = pd.read_excel(archivo, header=None)
+        # Detectar hojas disponibles y seleccionar la del país si existe
+        xl = pd.ExcelFile(archivo)
+        hojas_disponibles = xl.sheet_names
+        hoja_pais = HOJAS_PAIS.get(pais_label)
+
+        if hoja_pais and hoja_pais in hojas_disponibles:
+            hoja_usar = hoja_pais
+            st.info(f"📋 Leyendo pestaña: **{hoja_usar}**")
+        elif hoja_pais and hoja_pais not in hojas_disponibles:
+            # Intentar coincidencia parcial (por si hay tildes o espacios distintos)
+            coincidencia = next((h for h in hojas_disponibles if hoja_pais.lower() in h.lower() or h.lower() in hoja_pais.lower()), None)
+            if coincidencia:
+                hoja_usar = coincidencia
+                st.info(f"📋 Leyendo pestaña: **{hoja_usar}** (coincidencia aproximada)")
+            else:
+                hoja_usar = hojas_disponibles[0]
+                st.warning(f"⚠️ No se encontró la pestaña '{hoja_pais}'. Pestañas disponibles: {hojas_disponibles}. Usando: **{hoja_usar}**")
+        else:
+            hoja_usar = hojas_disponibles[0]
+
+        df_raw = pd.read_excel(xl, sheet_name=hoja_usar, header=None)
         st.markdown(f"**Previsualización del fichero cargado** ({len(df_raw)} filas totales):")
         st.dataframe(df_raw.head(8), use_container_width=True)
 
