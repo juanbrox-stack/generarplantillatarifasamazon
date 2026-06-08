@@ -187,9 +187,8 @@ def procesar_tarifas(df_origen, pais_seleccionado, col_sku, col_precio):
 # ---------------------------------------------------------------------------
 # Carga cacheada del Excel — se invalida al cambiar archivo O país
 # ---------------------------------------------------------------------------
-@st.cache_data(show_spinner=False)
 def cargar_hoja(file_bytes: bytes, pais: str):
-    """Lee la pestaña correcta del Excel según el país. Cacheado por (bytes, país)."""
+    """Lee la pestaña correcta del Excel según el país."""
     import io as _io
     xl = pd.ExcelFile(_io.BytesIO(file_bytes))
     hojas_disponibles = xl.sheet_names
@@ -244,13 +243,13 @@ archivo = st.file_uploader("Cargar fichero de tarifas (.xlsx)", type=["xlsx"])
 if archivo:
     try:
         # Leer la pestaña correcta (cacheado por bytes + país)
-        file_bytes = archivo.read()
+        file_bytes = archivo.getvalue()
         df_raw, hoja_usar, (msg_tipo, msg_texto) = cargar_hoja(file_bytes, pais_label)
         if msg_tipo == "info":
             st.info(msg_texto)
         elif msg_tipo == "warning":
             st.warning(msg_texto)
-        st.markdown(f"**Previsualización del fichero cargado** ({len(df_raw)} filas totales):")
+        st.markdown(f"**Previsualización — pestaña `{hoja_usar}`** ({len(df_raw)} filas totales):")
         st.dataframe(df_raw.head(8), use_container_width=True)
 
         df_datos, col_sku, col_precio_auto = detectar_columnas(df_raw)
