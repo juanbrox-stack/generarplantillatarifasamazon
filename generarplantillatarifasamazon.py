@@ -291,12 +291,31 @@ if archivo:
                 st.success(f"✅ ¡Hecho! {len(df_resultado)} filas generadas para **{pais_label}**.")
                 st.dataframe(df_resultado.head(15), use_container_width=True)
 
+                # --- TXT delimitado por tabulaciones (formato válido para Amazon) ---
+                # Decimales con punto, sin índice, codificación UTF-8
+                txt_buffer = io.StringIO()
+                df_resultado.to_csv(
+                    txt_buffer,
+                    sep="\t",
+                    index=False,
+                    lineterminator="\r\n",   # finales de línea estilo Windows (esperados por Amazon)
+                )
+                txt_bytes = txt_buffer.getvalue().encode("utf-8")
+
+                st.download_button(
+                    label="📥 Descargar TXT para Amazon",
+                    data=txt_bytes,
+                    file_name=f"Tarifas_{pais_label}_Amazon.txt",
+                    mime="text/tab-separated-values",
+                )
+
+                # Descarga opcional en Excel para revisión interna
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
                     df_resultado.to_excel(writer, index=False, sheet_name="Plantilla")
 
                 st.download_button(
-                    label="📥 Descargar Excel",
+                    label="📊 Descargar Excel (revisión)",
                     data=output.getvalue(),
                     file_name=f"Tarifas_{pais_label}_Final.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
